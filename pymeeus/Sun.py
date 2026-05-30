@@ -648,8 +648,14 @@ class Sun(object):
         # First check that input values are of correct types
         if not isinstance(epoch, Epoch):
             raise TypeError("Invalid input type")
+        
         # Compute the auxiliary parameters
-        epoch += 0.00068
+        
+        # Convert from UT to TT (JDE) using DeltaT for this epoch
+        # (Meeus ch. 29 example used the 1992 DeltaT = 59 s = 0.00068 day,
+        # but the correct value depends on the date).
+        year, month, _ = epoch.get_date()
+        epoch += Epoch.tt2ut(year, month) / 86400.0
         theta = (epoch() - 2398220.0) * 360.0 / 25.38
         theta = Angle(theta)
         i = Angle(7.25)
