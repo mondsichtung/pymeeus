@@ -124,27 +124,36 @@ If your system is appropriately configured, you can get the difference in second
 
     # From local system time to UTC you must add/subtract this amount of seconds: 7200.0
 
-Compute DeltaT = TT - UT differences for various dates::
+Compute DeltaT = TT - UT differences for various dates. ``tt2ut()`` accepts a
+calendar year and month (evaluated at the middle of the month, day 15), or an
+optional ``jde`` for an exact instant. The values below are the offline
+(Table-S15) results; forcing the empty table keeps them reproducible without
+downloading finals2000A (with finals2000A downloaded, dates within its range,
+such as 1977 and 1998, return the IERS-observed values instead)::
+
+    from pymeeus.DeltaT import DeltaTTable, set_delta_t_table
+
+    set_delta_t_table(DeltaTTable.empty())
 
     print_me("DeltaT (TT - UT) for Feb/333", round(Epoch.tt2ut(333, 2), 1))
 
-    # DeltaT (TT - UT) for Feb/333: 7358.5
+    # DeltaT (TT - UT) for Feb/333: 7164.4
 
     print_me("DeltaT (TT - UT) for Jan/1642", round(Epoch.tt2ut(1642, 1), 1))
 
-    # DeltaT (TT - UT) for Jan/1642: 62.1
+    # DeltaT (TT - UT) for Jan/1642: 52.2
 
-    print_me("DeltaT (TT - UT) for Feb/1928", round(Epoch.tt2ut(1928, 1), 1))
+    print_me("DeltaT (TT - UT) for Feb/1928", round(Epoch.tt2ut(1928, 2), 1))
 
-    # DeltaT (TT - UT) for Feb/1928: 24.2
+    # DeltaT (TT - UT) for Feb/1928: 24.3
 
     print_me("DeltaT (TT - UT) for Feb/1977", round(Epoch.tt2ut(1977, 2), 1))
 
-    # DeltaT (TT - UT) for Feb/1977: 47.7
+    # DeltaT (TT - UT) for Feb/1977: 47.4
 
     print_me("DeltaT (TT - UT) for Jan/1998", round(Epoch.tt2ut(1998, 1), 1))
 
-    # DeltaT (TT - UT) for Jan/1998: 63.0
+    # DeltaT (TT - UT) for Jan/1998: 62.9
 
 The difference between civil day and sidereal day is almost 4 minutes::
 

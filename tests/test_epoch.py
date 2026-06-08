@@ -18,9 +18,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+import pytest
+
 from pymeeus.base import TOL
 from pymeeus.Epoch import Epoch, JDE2000, DAY2SEC
 from pymeeus.Angle import Angle
+from pymeeus.DeltaT import DeltaTTable, set_delta_t_table
 
 
 # Epoch class
@@ -293,44 +296,60 @@ def test_epoch_get_date():
 def test_epoch_tt2ut():
     """Tests the tt2ut() method of Epoch class"""
 
-    assert abs(round(Epoch.tt2ut(1642, 1), 1) - 62.1) < TOL, \
+    # Force offline (Table-S15 only) mode so the expected values are
+    # deterministic and independent of the IERS finals2000A download.
+    set_delta_t_table(DeltaTTable.empty())
+
+
+    assert abs(round(Epoch.tt2ut(1642, 1), 1) - 52.2) < TOL, \
         "ERROR: 1st tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1680, 1), 1) - 15.3) < TOL, \
+    assert abs(round(Epoch.tt2ut(1680, 1), 1) - 21.6) < TOL, \
         "ERROR: 2nd tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1774, 1), 1) - 16.7) < TOL, \
+    assert abs(round(Epoch.tt2ut(1774, 1), 1) - 21.1) < TOL, \
         "ERROR: 3rd tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1890, 1), 1) - (-6.1)) < TOL, \
+    assert abs(round(Epoch.tt2ut(1890, 1), 1) - (-3.9)) < TOL, \
         "ERROR: 4th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1928, 2), 1) - 24.2) < TOL, \
+    assert abs(round(Epoch.tt2ut(1928, 2), 1) - 24.3) < TOL, \
         "ERROR: 5th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(2015, 7), 1) - 69.3) < TOL, \
+    assert abs(round(Epoch.tt2ut(2015, 7), 1) - 67.9) < TOL, \
         "ERROR: 6th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1000, 1), 1) - 1574.2) < TOL, \
+    assert abs(round(Epoch.tt2ut(1000, 1), 1) - 1650.0) < TOL, \
         "ERROR: 7th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(-501, 1), 1) - 17218.5) < TOL, \
+    assert abs(round(Epoch.tt2ut(-501, 1), 1) - 16953.5) < TOL, \
         "ERROR: 8th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1801, 1), 1) - 13.4) < TOL, \
+    assert abs(round(Epoch.tt2ut(1801, 1), 1) - 18.0) < TOL, \
         "ERROR: 9th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1930, 1), 1) - 24.1) < TOL, \
+    assert abs(round(Epoch.tt2ut(1930, 1), 1) - 24.4) < TOL, \
         "ERROR: 10th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1945, 1), 1) - 26.9) < TOL, \
+    assert abs(round(Epoch.tt2ut(1945, 1), 1) - 27.1) < TOL, \
         "ERROR: 11th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(1970, 1), 1) - 40.2) < TOL, \
+    assert abs(round(Epoch.tt2ut(1970, 1), 1) - 40.0) < TOL, \
         "ERROR: 12th tt2ut() test, output doesn't match"
 
-    assert abs(round(Epoch.tt2ut(2000, 1), 1) - 63.9) < TOL, \
+    assert abs(round(Epoch.tt2ut(2000, 1), 1) - 63.8) < TOL, \
         "ERROR: 13th tt2ut() test, output doesn't match"
+
+    assert abs(Epoch.tt2ut(1928, 2)
+                - Epoch.tt2ut(jde=Epoch(1928, 2, 15).jde())) < TOL, \
+        "ERROR: 14th tt2ut() test, year/month vs jde don't match"
+
+    assert abs(Epoch.tt2ut(jde=Epoch(1928, 2, 1).jde())
+                - Epoch.tt2ut(1928, 2)) > 1e-4, \
+        "ERROR: 15th tt2ut() test, jde instant is ignored"
+
+    with pytest.raises(ValueError):
+        Epoch.tt2ut(1928)
 
 
 def test_epoch_dow():

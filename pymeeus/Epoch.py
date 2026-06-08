@@ -24,6 +24,7 @@ from math import radians, cos, sin, asin, sqrt, acos, degrees
 
 from pymeeus.base import TOL, get_ordinal_suffix, iint
 from pymeeus.Angle import Angle
+from pymeeus.DeltaT import delta_t as _iers_delta_t
 
 
 """
@@ -1440,160 +1441,77 @@ class Epoch(object):
         return y, m, d, h, mi, s
 
     @staticmethod
-    def tt2ut(year, month):
-        """This method provides an approximation of the difference, in seconds,
-        between Terrestrial Time and Universal Time, denoted **DeltaT**, where:
-        DeltaT = TT - UT.
+    def tt2ut(year=None, month=None, jde=None):
+        """DeltaT = TT - UT1, in seconds.
 
-        Here we depart from Meeus book and use the polynomial expressions from:
+        Provide either a calendar ``year`` and ``month`` (DeltaT is evaluated
+        at the middle of that month, day 15), or an explicit ``jde`` (Julian
+        Ephemeris Date) to evaluate DeltaT at that exact instant. When ``jde``
+        is given it takes precedence and ``year``/``month`` are ignored.
 
-        https://eclipse.gsfc.nasa.gov/LEcat5/deltatpoly.html
+        It uses the IERS ``finals2000A.all`` daily table (downloaded lazily and
+        cached for 24 hours), with the Morrison-Stephenson-Hohenkerk-Zawilski
+        Table-S15 (2020) historical splines and the long-term parabola for
+        dates outside the IERS range. It replaces the older Espenak/Meeus
+        polynomial approximation.
 
-        Which are regarded as more elaborate and precise than Meeus'.
-
-        Please note that, by definition, the UTC time used internally in this
-        Epoch class by default is kept within 0.9 seconds from UT. Therefore,
-        UTC is in itself a quite good approximation to UT, arguably better than
-        some of the results provided by this method.
+        .. note:: The doctest values below are the offline (Table-S15) results
+           obtained without downloading finals2000A. With finals2000A
+           downloaded, recent decades return the IERS-observed values instead.
 
         :param year: Year we want to compute DeltaT for.
         :type year: int, float
         :param month: Month we want to compute DeltaT for.
         :type month: int, float
+        :param jde: Julian Ephemeris Date (TT) of the exact instant. When
+            given, ``year`` and ``month`` are ignored.
+        :type jde: int, float
 
         :returns: DeltaT, in seconds
         :rtype: float
+        :raises ValueError: if neither ``jde`` nor both ``year`` and ``month``
+            are provided.
 
+        >>> from pymeeus.DeltaT import DeltaTTable, set_delta_t_table
+        >>> set_delta_t_table(DeltaTTable.empty())  # offline / no download
         >>> round(Epoch.tt2ut(1642, 1), 1)
-        62.1
-        >>> round(Epoch.tt2ut(1680, 1), 1)
-        15.3
+        52.2
         >>> round(Epoch.tt2ut(1700, 1), 1)
-        8.8
-        >>> round(Epoch.tt2ut(1726, 1), 1)
-        10.9
-        >>> round(Epoch.tt2ut(1750, 1), 1)
-        13.4
-        >>> round(Epoch.tt2ut(1774, 1), 1)
-        16.7
+        14.1
         >>> round(Epoch.tt2ut(1800, 1), 1)
-        13.7
-        >>> round(Epoch.tt2ut(1820, 1), 1)
-        11.9
+        18.4
         >>> round(Epoch.tt2ut(1890, 1), 1)
-        -6.1
+        -3.9
         >>> round(Epoch.tt2ut(1928, 2), 1)
-        24.2
-        >>> round(Epoch.tt2ut(1977, 2), 1)
-        47.7
-        >>> round(Epoch.tt2ut(1998, 1), 1)
-        63.0
-        >>> round(Epoch.tt2ut(2015, 7), 1)
-        69.3
+        24.3
+        >>> round(Epoch.tt2ut(jde=Epoch(1928, 2, 15).jde()), 1)
+        24.3
         """
 
-        y = year + (month - 0.5) / 12.0
-        if year < -500:
-            u = (year - 1820.0) / 100.0
-            dt = -20.0 + 32.0 * u * u
-        elif year >= -500 and year < 500:
-            u = y / 100.0
-            dt = 10583.6 + u * (
-                -1014.41
-                + u
-                * (
-                    33.78311
-                    + u
-                    * (
-                        -5.952053
-                        + (u * (-0.1798452
-                                + u * (0.022174192 + 0.0090316521 * u)))
-                    )
-                )
-            )
-        elif year >= 500 and year < 1600:
-            u = (year - 1000) / 100.0
-            dt = 1574.2 + u * (
-                -556.01
-                + u
-                * (
-                    71.23472
-                    + u
-                    * (
-                        0.319781
-                        + (u * (-0.8503463
-                                + u * (-0.005050998 + 0.0083572073 * u)))
-                    )
-                )
-            )
-        elif year >= 1600 and year < 1700:
-            t = y - 1600.0
-            dt = 120.0 + t * (-0.9808 + t * (-0.01532 + t / 7129.0))
-        elif year >= 1700 and year < 1800:
-            t = y - 1700.0
-            dt = 8.83 + t * (
-                0.1603 + t * (-0.0059285 + t * (0.00013336 - t / 1174000.0))
-            )
-        elif year >= 1800 and year < 1860:
-            t = y - 1800.0
-            dt = 13.72 + t * (
-                -0.332447
-                + t
-                * (
-                    0.0068612
-                    + t
-                    * (
-                        0.0041116
-                        + t
-                        * (
-                            -0.00037436
-                            + t
-                            * (0.0000121272 + t * (-0.0000001699
-                                                   + 0.000000000875 * t))
-                        )
-                    )
-                )
-            )
-        elif year >= 1860 and year < 1900:
-            t = y - 1860.0
-            dt = 7.62 + t * (
-                0.5737
-                + t
-                * (-0.251754 + t * (0.01680668
-                                    + t * (-0.0004473624 + t / 233174.0)))
-            )
-        elif year >= 1900 and year < 1920:
-            t = y - 1900.0
-            dt = -2.79 + t * (
-                1.494119 + t * (-0.0598939 + t * (0.0061966 - 0.000197 * t))
-            )
-        elif year >= 1920 and year < 1941:
-            t = y - 1920.0
-            dt = 21.20 + t * (0.84493 + t * (-0.076100 + 0.0020936 * t))
-        elif year >= 1941 and year < 1961:
-            t = y - 1950.0
-            dt = 29.07 + t * (0.407 + t * (-1.0 / 233.0 + t / 2547.0))
-        elif year >= 1961 and year < 1986:
-            t = y - 1975.0
-            dt = 45.45 + t * (1.067 + t * (-1.0 / 260.0 - t / 718.0))
-        elif year >= 1986 and year < 2005:
-            t = y - 2000.0
-            dt = 63.86 + t * (
-                0.3345
-                + t
-                * (-0.060374 + t * (0.0017275
-                                    + t * (0.000651814 + 0.00002373599 * t)))
-            )
-        elif year >= 2005 and year < 2050:
-            t = y - 2000.0
-            dt = 62.92 + t * (0.32217 + 0.005589 * t)
-        elif year >= 2050 and year < 2150:
-            dt = (-20.0 + 32.0 * ((y - 1820.0) / 100.0) ** 2
-                  - 0.5628 * (2150.0 - y))
-        else:
-            u = (year - 1820.0) / 100.0
-            dt = -20.0 + 32.0 * u * u
-        return dt
+        if jde is None:
+            if year is None or month is None:
+                raise ValueError("tt2ut() requires either 'jde', or both "
+                                 "'year' and 'month'")
+            jde = Epoch(year, month, 15).jde()
+        return _iers_delta_t(jde)
+
+    @staticmethod
+    def delta_t(jde):
+        """DeltaT = TT - UT1, in seconds, for the given Julian Ephemeris Date.
+
+        Uses the IERS ``finals2000A.all`` table within range (downloaded lazily
+        and cached), with Table-S15 (2020) / long-term-parabola extrapolation
+        outside it. This is the precise per-instant DeltaT for an arbitrary
+        JDE; :meth:`tt2ut` is the convenience wrapper that also accepts a
+        calendar year and month.
+
+        :param jde: Julian Ephemeris Date (TT).
+        :type jde: float
+
+        :returns: DeltaT in seconds.
+        :rtype: float
+        """
+        return _iers_delta_t(jde)
 
     def dow(self, as_string=False):
         """Method to return the day of week corresponding to this Epoch.
@@ -2252,7 +2170,7 @@ def main():
     # Compute DeltaT = TT - UT differences for various dates
     print_me("DeltaT (TT - UT) for Feb/333", round(Epoch.tt2ut(333, 2), 1))
     print_me("DeltaT (TT - UT) for Jan/1642", round(Epoch.tt2ut(1642, 1), 1))
-    print_me("DeltaT (TT - UT) for Feb/1928", round(Epoch.tt2ut(1928, 1), 1))
+    print_me("DeltaT (TT - UT) for Feb/1928", round(Epoch.tt2ut(1928, 2), 1))
     print_me("DeltaT (TT - UT) for Feb/1977", round(Epoch.tt2ut(1977, 2), 1))
     print_me("DeltaT (TT - UT) for Jan/1998", round(Epoch.tt2ut(1998, 1), 1))
 
