@@ -222,6 +222,8 @@ class DeltaTTable(object):
         n = len(self.tt)
         if n == 0 or jde < self.tt[0] or jde > self.tt[n - 1]:
             return None
+        if jde == self.tt[n - 1]:
+            return self.val[n - 1]
         lo = 0
         hi = n - 1
         while lo < hi - 1:
