@@ -20,7 +20,7 @@
 import pytest
 
 from pymeeus.BesselianElements import (BesselianElements,
-                                       LunarBesselianElements)
+                                       LunarBesselianElements, _places)
 from pymeeus.Eclipse import Eclipse
 from pymeeus.Epoch import Epoch
 
@@ -164,3 +164,12 @@ def test_lunar_matches_nasa_canon(date, td, kind, gamma, pmag, umag,
             assert c[first] is None and c[last] is None
         else:
             assert abs((c[last] - c[first]) * 1440.0 - expected) < 0.5
+
+
+@pytest.mark.parametrize("cls, date", [(BesselianElements, (2024, 4, 8.0)),
+                                       (LunarBesselianElements,
+                                        (2025, 3, 14.0))])
+def test_from_places_with_the_builtin_places_is_the_builtin_fit(cls, date):
+    builtin = cls(Epoch(*date))
+    fitted = cls.from_places(_places, builtin.t_max_epoch.jde())
+    assert vars(fitted) == vars(builtin)

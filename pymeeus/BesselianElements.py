@@ -74,6 +74,9 @@ Third-degree polynomials are then fitted to these samples via least-squares
 regression.  The window covers the penumbral contacts, which lie up to
 about 3.5 h from t0.
 
+Either class can instead be fitted to another ephemeris's apparent places,
+around a given estimate of greatest eclipse, with ``from_places``.
+
 Lunar eclipses use the same Sun and Moon positions and the same nine
 samples.  The elements are the Moon's position relative to the axis of the
 Earth's shadow (x, y) and the angular radii of the penumbra (f1), the umbra
@@ -265,15 +268,26 @@ def _project(ra, dec, r, a, d):
     return x, y, z
 
 
+def _places(epoch):
+    """Return the Sun's and the Moon's apparent (ra, dec, distance) in
+    radians and Earth radii, and the Greenwich apparent sidereal time in
+    radians, at the TT epoch: the contract of ``from_places``."""
+    return (_sun_equatorial(epoch), _moon_equatorial(epoch),
+            _greenwich_apparent_sidereal_time(epoch))
+
+
 def _elements_at_instant(epoch):
-    """Compute raw Besselian elements at a single instant.
+    """Compute raw Besselian elements at a single instant (TT)."""
+    return _elements_from_places(*_places(epoch))
+
+
+def _elements_from_places(sun, moon, theta):
+    """Compute raw Besselian elements from the places of ``_places``.
 
     Returns dict with x, y, d (deg), l1, l2, mu (deg), tanf1, tanf2.
-    The epoch is assumed to be in the TT time scale.
     """
-    sun_ra, sun_dec, sun_r = _sun_equatorial(epoch)
-    moon_ra, moon_dec, moon_r = _moon_equatorial(epoch)
-    theta = _greenwich_apparent_sidereal_time(epoch)
+    sun_ra, sun_dec, sun_r = sun
+    moon_ra, moon_dec, moon_r = moon
 
     sun_xyz = [
         sun_r * cos(sun_dec) * cos(sun_ra),
@@ -323,15 +337,22 @@ def _elements_at_instant(epoch):
 
 
 def _lunar_elements_at_instant(epoch):
-    """Compute raw lunar eclipse elements at a single instant (TT).
+    """Compute raw lunar eclipse elements at a single instant (TT)."""
+    return _lunar_elements_from_places(_sun_equatorial(epoch),
+                                       _moon_equatorial(epoch))
+
+
+def _lunar_elements_from_places(sun, moon):
+    """Compute raw lunar eclipse elements from the Sun's and the Moon's
+    places of ``_places``.
 
     Returns dict with x, y, f1, f2, f3, all in degrees as seen from the
     Earth's centre.
     """
     # The shadow axis points away from the apparent (aberrated) Sun.  This
     # matches the NASA canon; the geometric Sun shifts times by about 40 s.
-    sun_ra, sun_dec, sun_r = _sun_equatorial(epoch)
-    moon_ra, moon_dec, moon_r = _moon_equatorial(epoch)
+    sun_ra, sun_dec, sun_r = sun
+    moon_ra, moon_dec, moon_r = moon
     x, y, z = _project(moon_ra, moon_dec, moon_r, sun_ra + pi, -sun_dec)
 
     # Rescale (x, y) so that hypot(x, y) is the angular distance between the
@@ -553,9 +574,30 @@ class BesselianElements(object):
         if not isinstance(epoch, Epoch):
             raise TypeError("Invalid input type")
 
-        jde = Eclipse.solar_eclipse(epoch)[0].jde()
-        self.t0, self.jde_t0, self.t_max, fits = _fit_around(
-            _elements_at_instant, jde)
+        self._fit(_elements_at_instant, Eclipse.solar_eclipse(epoch)[0].jde())
+
+    @classmethod
+    def from_places(cls, places, jde):
+        """Compute Besselian elements from another ephemeris.
+
+        :param places: Function of a TT :py:class:`Epoch` returning
+            ``(sun, moon, theta)``: the Sun's and the Moon's apparent
+            ``(ra, dec, distance)`` of date in radians and Earth radii, and
+            the Greenwich apparent sidereal time in radians.
+        :type places: callable
+        :param jde: TT JDE within a few hours of greatest eclipse, such as
+            the new moon, in place of the Meeus ch. 54 estimate.
+        :type jde: float
+        :returns: The elements, with the attributes of the constructor.
+        :rtype: :py:class:`BesselianElements`
+        """
+        elements = cls.__new__(cls)
+        elements._fit(lambda epoch: _elements_from_places(*places(epoch)), jde)
+        return elements
+
+    def _fit(self, instant, jde):
+        """Fit the elements returned by instant(epoch) around jde."""
+        self.t0, self.jde_t0, self.t_max, fits = _fit_around(instant, jde)
         self.t_max_epoch = Epoch(self.jde_t0 + self.t_max / DAY2HOURS)
         self.x, self.y, self.d = fits["x"], fits["y"], fits["d"]
         self.l1, self.l2, self.mu = fits["l1"], fits["l2"], fits["mu"]
@@ -660,9 +702,31 @@ class LunarBesselianElements(object):
         if not isinstance(epoch, Epoch):
             raise TypeError("Invalid input type")
 
-        jde = Eclipse.lunar_eclipse(epoch)[0].jde()
-        self.t0, self.jde_t0, self.t_max, fits = _fit_around(
-            _lunar_elements_at_instant, jde)
+        self._fit(_lunar_elements_at_instant,
+                  Eclipse.lunar_eclipse(epoch)[0].jde())
+
+    @classmethod
+    def from_places(cls, places, jde):
+        """Compute lunar eclipse elements from another ephemeris.
+
+        :param places: As in :py:meth:`BesselianElements.from_places`; the
+            sidereal time is not used.
+        :type places: callable
+        :param jde: TT JDE within a few hours of greatest eclipse, such as
+            the full moon, in place of the Meeus ch. 54 estimate.
+        :type jde: float
+        :returns: The elements, with the attributes of the constructor.
+        :rtype: :py:class:`LunarBesselianElements`
+        """
+        elements = cls.__new__(cls)
+        elements._fit(
+            lambda epoch: _lunar_elements_from_places(*places(epoch)[:2]),
+            jde)
+        return elements
+
+    def _fit(self, instant, jde):
+        """Fit the elements returned by instant(epoch) around jde."""
+        self.t0, self.jde_t0, self.t_max, fits = _fit_around(instant, jde)
         self.t_max_epoch = Epoch(self.jde_t0 + self.t_max / DAY2HOURS)
         self.x, self.y = fits["x"], fits["y"]
         self.f1, self.f2, self.f3 = fits["f1"], fits["f2"], fits["f3"]
